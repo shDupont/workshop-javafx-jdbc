@@ -14,7 +14,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 
 import java.net.URL;
-import java.util.ResourceBundle;
+import java.util.*;
 
 public class DepartmentFormController implements Initializable {
 
@@ -22,12 +22,18 @@ public class DepartmentFormController implements Initializable {
 
     private DepartmentService service;
 
+    private List<DataChangeListener> dataChangeListenerList = new ArrayList<>();
+
     public void setService(DepartmentService service){
         this.service = service;
     }
 
     public void setDepartment(Department entity){
         this.entity = entity;
+    }
+
+    public void subscribeDataChangeListener(DataChangeListener listener){
+        dataChangeListenerList.add(listener);
     }
 
     public void updateFormData(){
@@ -63,17 +69,37 @@ public class DepartmentFormController implements Initializable {
         try {
             entity = getFormData();
             service.saveOrUpdate(entity);
+            notifyDataChangeListeners();
             Utils.currentStage(event).close();
+        } catch (ValidationException e){
+            setErrorMessages(e.getErrors());
         } catch (DbException e){
             Alerts.showAlert("Error saving obj", null, e.getMessage(), Alert.AlertType.ERROR);
         }
 
     }
 
+    private void notifyDataChangeListeners() {
+        for (DataChangeListener listener: dataChangeListenerList) {
+            listener.onDataChanged();
+        }
+    }
+
     private Department getFormData() {
         Department obj = new Department();
+
+        ValidationException exception = new ValidationException("Validation error");
+
         obj.setId(Utils.tryParseToInt(txtId.getText()));
+        if (txtName.getText() == null || txtName.getText().trim().equals("")){
+            exception.addError("name", "field can't be empty");
+        }
         obj.setName(txtName.getText());
+
+        if(exception.getErrors().size() > 0){
+            throw exception;
+        }
+
         return obj;
     }
 
@@ -90,5 +116,12 @@ public class DepartmentFormController implements Initializable {
     private void initializeNodes(){
         Constraints.setTextFieldInteger(txtId);
         Constraints.setTextFieldMaxLength(txtName, 30);
+    }
+
+    private void setErrorMessages(Map<String, String> errors){
+        Set<String> fields = errors.keySet();
+        if(fields.contains("name")){
+            labelErrorName.setText(errors.get("name"));
+        }
     }
 }
